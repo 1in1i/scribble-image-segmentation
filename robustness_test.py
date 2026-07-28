@@ -4,12 +4,9 @@ import cv2
 import torch
 from torch.utils.data import DataLoader
 
-# Import necessary components from your other scripts
 from data_loader import get_dataloaders
 from train_unet import UNet, scribbles_to_input_channels, calculate_iou, enforce_scribble_constraints
 
-# Assuming your GrabCut implementation is in a file named grabcut.py
-# If it's in the same file, you can remove this import.
 from grab import grabcut_segmentation 
 
 def add_gaussian_noise(image_np: np.ndarray, sigma=50) -> np.ndarray:
@@ -28,9 +25,7 @@ def reduce_brightness(image_np: np.ndarray, factor=0.3) -> np.ndarray:
 @torch.no_grad()
 def run_robustness_evaluation(unet_model, loader, device):
     unet_model.eval()
-    
-    # Lists to store mIoU scores for each condition
-    scores = {
+        scores = {
         "unet_original": [], "grabcut_original": [],
         "unet_noisy": [], "grabcut_noisy": [],
         "unet_dark": [], "grabcut_dark": []
@@ -39,37 +34,28 @@ def run_robustness_evaluation(unet_model, loader, device):
     print("Running robustness evaluation...")
     for images, scribbles, gts, _ in loader:
         for i in range(images.size(0)):
-            # --- Prepare Data ---
             image_t = images[i:i+1].to(device)
             scribble_t = scribbles[i:i+1].to(device)
             gt_np = gts[i].squeeze(0).cpu().numpy()
             
             image_np = (images[i].permute(1, 2, 0).numpy() * 255).astype(np.uint8)
             scribble_np = scribbles[i].squeeze(0).cpu().numpy().astype(np.int16)
-
-            # --- Create Perturbed Images ---
             image_noisy_np = add_gaussian_noise(image_np)
             image_dark_np = reduce_brightness(image_np)
             
-            # Convert perturbed images to tensors for U-Net
             image_noisy_t = torch.from_numpy(image_noisy_np).permute(2, 0, 1).float().unsqueeze(0) / 255.0
             image_dark_t = torch.from_numpy(image_dark_np).permute(2, 0, 1).float().unsqueeze(0) / 255.0
 
-            # --- Run Models on All Conditions ---
-            # 1. Original Image
             unet_pred_orig = (unet_model(torch.cat([image_t, scribbles_to_input_channels(scribble_t)], dim=1)) > 0.5)
             grabcut_pred_orig = grabcut_segmentation(image_np, scribble_np)
 
-            # 2. Noisy Image
             unet_pred_noisy = (unet_model(torch.cat([image_noisy_t.to(device), scribbles_to_input_channels(scribble_t)], dim=1)) > 0.5)
             grabcut_pred_noisy = grabcut_segmentation(image_noisy_np, scribble_np)
             
-            # 3. Dark Image
             unet_pred_dark = (unet_model(torch.cat([image_dark_t.to(device), scribbles_to_input_channels(scribble_t)], dim=1)) > 0.5)
             grabcut_pred_dark = grabcut_segmentation(image_dark_np, scribble_np)
 
-            # --- Post-process and Evaluate ---
-            # Helper to process and calculate mIoU
+
             def evaluate(pred, key):
                 if isinstance(pred, torch.Tensor):
                     pred_np = pred.squeeze(0).squeeze(0).cpu().numpy().astype(np.uint8)
@@ -90,7 +76,6 @@ def run_robustness_evaluation(unet_model, loader, device):
             evaluate(unet_pred_dark, "unet_dark")
             evaluate(grabcut_pred_dark, "grabcut_dark")
 
-    # --- Report Final Scores ---
     print("\n--- Robustness Evaluation Complete ---")
     print(f"{'Model':<10} | {'mIoU (Original)':<18} | {'mIoU (Noisy)':<15} | {'mIoU (Dark)':<15}")
     print("-" * 65)
