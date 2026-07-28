@@ -1,0 +1,14 @@
+.idea/
+data_preprocessing/
+dataset/
+figures/
+plots/
+challenge.py
+*.md
+train_unet.py
+unet_.py
+*.pth
+.DS_Store
+.history-aklywtx
+__pycache__/
+unet_test.py
